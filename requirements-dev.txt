@@ -1,0 +1,1 @@
+pytest>=8.0.0   # optional: 'python -m unittest' also works
