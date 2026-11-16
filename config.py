@@ -40,3 +40,12 @@ AGENT_MAX_REPLANS = 2
 API_HOST = os.environ.get("AETHER_HOST", "127.0.0.1")
 API_PORT = int(os.environ.get("AETHER_PORT", "8000"))
 API_TOKEN = os.environ.get("AETHER_API_TOKEN") or None
+
+# Advanced memory
+HISTORY_MESSAGES = 12            # recent chat messages sent to the model each turn
+CONSOLIDATE_AFTER = 24           # summarize once this many older messages are unsummarized
+MEMORY_WEIGHT_SIMILARITY = 0.6   # retrieval score = weighted sum of these three
+MEMORY_WEIGHT_RECENCY = 0.2
+MEMORY_WEIGHT_IMPORTANCE = 0.2
+MEMORY_HALF_LIFE_DAYS = 30.0     # recency halves every N days
+MEMORY_DEDUPE_THRESHOLD = 0.92   # near-duplicate memories are merged above this similarity

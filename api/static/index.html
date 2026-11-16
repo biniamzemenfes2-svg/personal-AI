@@ -51,6 +51,8 @@
   </section>
   <aside>
     <h2>Alerts</h2><div id="alerts"></div>
+    <h2>Memories <button class="ghost" id="newchat" style="float:right;padding:1px 8px;font-size:12px">New chat</button></h2>
+    <div id="memories"></div>
     <h2>Tasks</h2><div id="tasks"></div>
     <form id="taskform" style="padding:8px 0 0;border:0">
       <input type="text" id="taskinput" placeholder="New task…"><button>Add</button>
@@ -106,8 +108,24 @@ async function refresh() {
       del.onclick = async () => { await api(`/api/tasks/${id}`, { method: "DELETE" }); refresh(); };
       row.append(label, done, del); $("tasks").appendChild(row);
     });
+    const m = await api("/api/memories?limit=8");
+    $("memories").innerHTML = "";
+    if (!m.memories.length) $("memories").textContent = "Nothing remembered yet.";
+    m.memories.forEach(x => {
+      const row = document.createElement("div"); row.className = "task";
+      const label = document.createElement("span"); label.textContent = x.text.slice(0, 80);
+      label.title = x.kind + " · importance " + x.importance.toFixed(1);
+      const del = document.createElement("button"); del.className = "ghost"; del.textContent = "Forget";
+      del.onclick = async () => { await api(`/api/memories/${x.id}`, { method: "DELETE" }); refresh(); };
+      row.append(label, del); $("memories").appendChild(row);
+    });
   } catch (e) { $("specs").textContent = "Status unavailable: " + e.message; }
 }
+
+$("newchat").onclick = async () => {
+  await api("/api/conversation/clear", { method: "POST", body: "{}" });
+  $("log").innerHTML = ""; add("Conversation cleared. Long-term memories are kept.", "sys");
+};
 
 function showPlan(goal, steps) {
   const box = document.createElement("div"); box.className = "plan";

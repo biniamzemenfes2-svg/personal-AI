@@ -11,6 +11,16 @@ Data lives in `~/AetherOS` (override with `AETHER_HOME`); files the AI writes go
 
 Adding a tool: create `tools/<name>.py`, add its schema to `TOOLS` in `core/kernel.py`, and handle it in `Kernel._execute_tool`.
 
+## Memory
+
+- **Short-term:** each chat session keeps its history (last `HISTORY_MESSAGES`, default 12, are sent to the model). Terminal and web UI have separate sessions. Agent steps run statelessly.
+- **Long-term:** facts you ask it to remember (importance 0.9), task and file events (0.5-0.6) and automatic summaries (0.6). Raw chat is no longer logged as memory.
+- **Retrieval:** relevance gate on similarity, then ranked by similarity + recency (half-life `MEMORY_HALF_LIFE_DAYS`) + importance; weights in `config.py`.
+- **Dedupe:** near-duplicates (>= `MEMORY_DEDUPE_THRESHOLD`) of the same kind are merged and refreshed instead of added.
+- **Consolidation:** once `CONSOLIDATE_AFTER` older messages pile up, they are summarized into one memory.
+- **Control:** terminal `/memories`, `/forget <id>`, `/clear`; web sidebar has Forget buttons and New chat.
+- Old databases are migrated automatically on start (past exchange logs are marked low-importance).
+
 ## Web UI
 
     python serve.py        # then open http://127.0.0.1:8000

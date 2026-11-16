@@ -39,11 +39,13 @@ TOOLS = [
 
 
 class Kernel:
-    def __init__(self, client, memory, files, tasks):
+    def __init__(self, client, memory, files, tasks, conversation=None, consolidator=None):
         self.client = client
         self.memory = memory
         self.files = files
         self.tasks = tasks
+        self.conversation = conversation      # short-term chat history (optional)
+        self.consolidator = consolidator      # summarizes old history into long-term memory (optional)
         self._last_call_ok = True
         # True if the final tool call of the latest run_command failed (i.e. unrecovered)
         self.last_run_failed = False
@@ -55,7 +57,7 @@ class Kernel:
             "You are AetherOS, a stateful, proactive AI Operating System.\n"
             f"Today's Date/Time: {datetime.now():%Y-%m-%d %H:%M:%S}\n"
             f"Relevant context from your memory bank:\n{context}\n\n"
-            "Respond with actionable answers. If a tool is needed, call it."
+            "The recent conversation follows as chat messages. Respond with actionable answers. If a tool is needed, call it."
         )
 
     def _execute_tool(self, name: str, args: dict):
@@ -76,7 +78,8 @@ class Kernel:
             action = args.get("action")
             if action == "write":
                 result = self.files.write(args.get("filename", ""), args.get("content", ""))
-                self.memory.store(f"Wrote file '{args.get('filename')}': {(args.get('content') or '')[:100]}")
+                self.memory.store(f"Wrote file '{args.get('filename')}': {(args.get('content') or '')[:100]}",
+                                  importance=0.5, kind="event")
                 return result
             if action == "read":
                 return self.files.read(args.get("filename", ""))
@@ -87,7 +90,7 @@ class Kernel:
             action = args.get("action")
             if action == "add":
                 result = self.tasks.add(args.get("task_desc"), args.get("priority", "Medium"))
-                self.memory.store(f"User added a goal: {args.get('task_desc')}")
+                self.memory.store(f"User added a goal: {args.get('task_desc')}", importance=0.6, kind="event")
                 return result
             if action == "list":
                 return self.tasks.list()
@@ -97,15 +100,17 @@ class Kernel:
                 return self.tasks.delete(int(args.get("task_id", -1)))
             raise ValueError(f"Unknown task action: {action}")
         if name == "save_to_memory":
-            return self.memory.store(args.get("fact", ""))
+            return self.memory.store(args.get("fact", ""), importance=0.9, kind="fact")
         raise ValueError(f"Unknown tool: {name}")
 
-    def run_command(self, prompt: str) -> str:
+    def run_command(self, prompt: str, session_id="default") -> str:
+        """session_id=None runs statelessly (no chat history read or written), used by the agent."""
         self.last_run_failed = False
-        messages = [
-            {"role": "system", "content": self._system_prompt(prompt)},
-            {"role": "user", "content": prompt},
-        ]
+        use_history = bool(session_id and self.conversation)
+        history = self.conversation.recent(session_id, config.HISTORY_MESSAGES) if use_history else []
+        messages = [{"role": "system", "content": self._system_prompt(prompt)}]
+        messages += history
+        messages.append({"role": "user", "content": prompt})
         output = ""
         for _ in range(config.MAX_TOOL_ROUNDS):
             resp = self.client.chat.completions.create(
@@ -129,5 +134,12 @@ class Kernel:
             resp = self.client.chat.completions.create(model=config.MODEL_NAME, messages=messages)
             output = resp.choices[0].message.content or ""
 
-        self.memory.store(f"User asked: {prompt} | OS responded: {output[:150]}")
+        if use_history:
+            self.conversation.add(session_id, "user", prompt)
+            self.conversation.add(session_id, "assistant", output)
+            if self.consolidator:
+                try:
+                    self.consolidator.maybe_run(session_id)
+                except Exception:
+                    log.exception("Memory consolidation failed")
         return output

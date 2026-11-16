@@ -59,8 +59,9 @@ def create_app(system, token=None):
         message, err = body_field("message")
         if err:
             return err
+        session = (request.get_json(silent=True) or {}).get("session_id") or "web"
         with ai_lock:
-            reply = system.kernel.run_command(message)
+            reply = system.kernel.run_command(message, session_id=str(session)[:64])
         return jsonify(reply=reply, tool_failed=system.kernel.last_run_failed)
 
     @app.get("/api/tasks")
@@ -116,5 +117,25 @@ def create_app(system, token=None):
                     {"step": step, "result": result,
                      "ok": not result.startswith(("FAILED", "SKIPPED"))}))
         return jsonify(summary=summary, steps=log_steps)
+
+    @app.get("/api/memories")
+    def list_memories():
+        try:
+            limit = min(200, max(1, int(request.args.get("limit", 50))))
+        except ValueError:
+            return jsonify(error="limit must be an integer"), 400
+        return jsonify(memories=system.memory.list(limit))
+
+    @app.delete("/api/memories/<int:memory_id>")
+    def forget_memory(memory_id):
+        try:
+            return jsonify(message=system.memory.delete(memory_id))
+        except LookupError as e:
+            return jsonify(error=str(e)), 404
+
+    @app.post("/api/conversation/clear")
+    def clear_conversation():
+        session = (request.get_json(silent=True) or {}).get("session_id") or "web"
+        return jsonify(cleared=system.conversation.clear(str(session)[:64]))
 
     return app

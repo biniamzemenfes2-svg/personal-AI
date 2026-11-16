@@ -35,6 +35,27 @@ def run_agent(console, agent, goal, auto):
     return response
 
 
+def handle_memory_command(console, system, text):
+    """/memories lists long-term memories, /forget <id> deletes one, /clear resets the chat history."""
+    if text == "/memories":
+        items = system.memory.list(20)
+        if not items:
+            console.print("[dim]No long-term memories yet.[/dim]")
+        for m in items:
+            console.print(f"  #{m['id']} [{m['kind']}, importance {m['importance']:.1f}] {m['text'][:120]}",
+                          markup=False)
+    elif text.startswith("/forget "):
+        try:
+            console.print(system.memory.delete(int(text.split()[1])), markup=False)
+        except (ValueError, IndexError):
+            console.print("Usage: /forget <memory id>", markup=False)
+        except LookupError as e:
+            console.print(str(e), markup=False)
+    elif text == "/clear":
+        n = system.conversation.clear("terminal")
+        console.print(f"Conversation cleared ({n} messages).", markup=False)
+
+
 def main():
     config.ensure_dirs()
     logging.basicConfig(filename=config.LOG_PATH, level=logging.INFO,
@@ -58,6 +79,9 @@ def main():
                 continue
             if user_input.lower() in ("exit", "shutdown", "quit"):
                 break
+            if user_input in ("/memories", "/clear") or user_input.startswith("/forget "):
+                handle_memory_command(console, system, user_input)
+                continue
             try:
                 if user_input.startswith(("/plan ", "/auto ")):
                     auto = user_input.startswith("/auto ")
@@ -65,7 +89,7 @@ def main():
                     response = run_agent(console, agent, goal, auto)
                 else:
                     with console.status("[bold blue]Querying cognitive pipeline...", spinner="dots"):
-                        response = kernel.run_command(user_input)
+                        response = kernel.run_command(user_input, session_id="terminal")
                 dashboard.show_response(response)
             except Exception as e:
                 logging.exception("Command failed")

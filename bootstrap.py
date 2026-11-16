@@ -8,6 +8,8 @@ from agent.engine import AgentEngine
 from core.kernel import Kernel
 from database import Database
 from memory.vector_store import VectorStore
+from memory.consolidator import Consolidator
+from memory.conversation import ConversationStore
 from monitoring.daemon import Daemon
 from tools.file_manager import FileManager
 from tools.task_manager import TaskManager
@@ -20,6 +22,8 @@ class System:
     tasks: TaskManager
     files: FileManager
     daemon: Daemon
+    memory: VectorStore
+    conversation: ConversationStore
 
 
 def api_key_missing() -> bool:
@@ -33,8 +37,10 @@ def build_system(start_daemon: bool = True) -> System:
     memory = VectorStore(db, client, config.EMBED_MODEL)
     files = FileManager(config.WORKSPACE_DIR)
     tasks = TaskManager(db)
-    kernel = Kernel(client, memory, files, tasks)
+    conversation = ConversationStore(db)
+    kernel = Kernel(client, memory, files, tasks, conversation,
+                    Consolidator(client, conversation, memory))
     daemon = Daemon(tasks)
     if start_daemon:
         daemon.start()
-    return System(kernel, AgentEngine(client, kernel), tasks, files, daemon)
+    return System(kernel, AgentEngine(client, kernel), tasks, files, daemon, memory, conversation)

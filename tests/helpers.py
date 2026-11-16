@@ -47,3 +47,15 @@ class TempCase(unittest.TestCase):
         self.addCleanup(self._td.cleanup)
         self.tmp = Path(self._td.name)
         self.db = Database(self.tmp / "test.db")
+
+
+class RecordingClient(FakeClient):
+    """FakeClient that remembers the messages of every chat call (copied at call time)."""
+
+    def __init__(self, *a, **k):
+        super().__init__(*a, **k)
+        self.seen = []
+
+    def create(self, **kw):
+        self.seen.append(list(kw.get("messages", [])))
+        return super().create(**kw)

@@ -77,7 +77,7 @@ class AgentEngine:
                 f"Now carry out only this step: {step}"
             )
             try:
-                result = self.kernel.run_command(prompt)
+                result = self.kernel.run_command(prompt, session_id=None)
                 failed = bool(getattr(self.kernel, "last_run_failed", False))
                 if failed:
                     result = f"FAILED: a tool call failed and was not recovered. {result}"
